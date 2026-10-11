@@ -22,9 +22,10 @@ export interface ServiceCheckResult {
   details?: Record<string, unknown>;
 }
 
-export async function checkSupabaseConnection(): Promise<ServiceCheckResult> {
+export async function checkSupabaseConnection(options?: { silent?: boolean }): Promise<ServiceCheckResult> {
+  const silent = options?.silent ?? false;
   if (!config.supabase.url || !config.supabase.key) {
-    console.warn('\x1b[33m[SUPABASE] Missing SUPABASE_URL or SUPABASE_ANON_KEY.\x1b[0m');
+    if (!silent) console.warn('\x1b[33m[SUPABASE] Missing SUPABASE_URL or SUPABASE_ANON_KEY.\x1b[0m');
     return {
       status: 'not_configured',
       message: 'Supabase credentials are not configured (missing SUPABASE_URL or SUPABASE_ANON_KEY).',
@@ -33,7 +34,7 @@ export async function checkSupabaseConnection(): Promise<ServiceCheckResult> {
 
   const supabase = getSupabaseClient();
   if (!supabase) {
-    console.error('\x1b[31m[SUPABASE] Client initialization failed.\x1b[0m');
+    if (!silent) console.error('\x1b[31m[SUPABASE] Client initialization failed.\x1b[0m');
     return {
       status: 'not_configured',
       message: 'Supabase client could not be initialized.',
@@ -42,7 +43,7 @@ export async function checkSupabaseConnection(): Promise<ServiceCheckResult> {
 
   const startTime = Date.now();
   try {
-    console.log(`\x1b[34m[SUPABASE] Pinging Supabase project at ${new URL(config.supabase.url).hostname}...\x1b[0m`);
+    if (!silent) console.log(`\x1b[34m[SUPABASE] Pinging Supabase project at ${new URL(config.supabase.url).hostname}...\x1b[0m`);
     const timeoutPromise = new Promise<never>((_, reject) =>
       setTimeout(() => reject(new Error('Supabase request timed out after 5000ms')), 5000)
     );
@@ -54,7 +55,7 @@ export async function checkSupabaseConnection(): Promise<ServiceCheckResult> {
 
     if (result.error) {
       if (result.error.code === '42P01' || result.error.message.includes('relation') || result.error.message.includes('does not exist')) {
-        console.warn(`\x1b[33m[SUPABASE CONNECTED] Table "demo_entries" not yet created in PostgreSQL (${latencyMs}ms).\x1b[0m`);
+        if (!silent) console.warn(`\x1b[33m[SUPABASE CONNECTED] Table "demo_entries" not yet created in PostgreSQL (${latencyMs}ms).\x1b[0m`);
         return {
           status: 'connected',
           latencyMs,
@@ -62,7 +63,7 @@ export async function checkSupabaseConnection(): Promise<ServiceCheckResult> {
           details: { tableStatus: 'needs_table_creation' },
         };
       }
-      console.error(`\x1b[31m[SUPABASE ERROR] ${result.error.message} (${latencyMs}ms)\x1b[0m`);
+      if (!silent) console.error(`\x1b[31m[SUPABASE ERROR] ${result.error.message} (${latencyMs}ms)\x1b[0m`);
       return {
         status: 'error',
         latencyMs,
@@ -70,7 +71,7 @@ export async function checkSupabaseConnection(): Promise<ServiceCheckResult> {
       };
     }
 
-    console.log(`\x1b[32m[SUPABASE SUCCESS] Ping OK (${latencyMs}ms)\x1b[0m`);
+    if (!silent) console.log(`\x1b[32m[SUPABASE SUCCESS] Ping OK (${latencyMs}ms)\x1b[0m`);
     return {
       status: 'connected',
       latencyMs,
@@ -79,7 +80,7 @@ export async function checkSupabaseConnection(): Promise<ServiceCheckResult> {
   } catch (error: unknown) {
     const latencyMs = Date.now() - startTime;
     const msg = error instanceof Error ? error.message : 'Unknown connection error';
-    console.error(`\x1b[31m[SUPABASE CONNECTION FAILED] ${msg} (${latencyMs}ms)\x1b[0m`);
+    if (!silent) console.error(`\x1b[31m[SUPABASE CONNECTION FAILED] ${msg} (${latencyMs}ms)\x1b[0m`);
     return {
       status: 'unavailable',
       latencyMs,

@@ -4,6 +4,9 @@ import { config } from './config/env.js';
 import { healthRouter } from './routes/health.js';
 import { servicesRouter } from './routes/services.js';
 import { demoRouter } from './routes/demo.js';
+import { checkSupabaseConnection } from './db/supabase.js';
+import { checkMongoConnection } from './db/mongodb.js';
+import { checkRedisConnection } from './db/redis.js';
 
 const app = express();
 
@@ -112,11 +115,42 @@ app.use((err: unknown, req: Request, res: Response, _next: NextFunction) => {
 
 // Start listening if executed directly
 if (process.env.NODE_ENV !== 'test') {
-  app.listen(config.port, () => {
-    console.log(`\n====================================================`);
-    console.log(`🚀 Deployment Playground Express API running on port ${config.port}`);
-    console.log(`📡 Ready for requests — Terminal logger ACTIVE`);
-    console.log(`====================================================\n`);
+  app.listen(config.port, async () => {
+    const serverUrl = `http://localhost:${config.port}`;
+    let clientUrl = config.corsOrigin;
+    if (clientUrl && !clientUrl.startsWith('http://') && !clientUrl.startsWith('https://') && clientUrl !== '*') {
+      clientUrl = `http://${clientUrl}`;
+    }
+
+    // Ping services in parallel for startup diagnostics
+    const [supabaseStatus, redisStatus, mongoStatus] = await Promise.all([
+      checkSupabaseConnection({ silent: true }).catch((err: Error) => ({ status: 'unavailable', message: err.message })),
+      checkRedisConnection({ silent: true }).catch((err: Error) => ({ status: 'unavailable', message: err.message })),
+      checkMongoConnection({ silent: true }).catch((err: Error) => ({ status: 'unavailable', message: err.message })),
+    ]);
+
+    const formatService = (label: string, res: { status: string; message: string }) => {
+      if (res.status === 'connected') {
+        return `\x1b[32m✅ ${label}\x1b[0m`;
+      } else if (res.status === 'not_configured') {
+        return `\x1b[33m⚠️ ${label} (Not configured)\x1b[0m`;
+      } else {
+        return `\x1b[31m❌ ${label} (Unavailable: ${res.message})\x1b[0m`;
+      }
+    };
+
+    console.log(
+      `\n` +
+      `${formatService('PostgreSQL pool initialized', supabaseStatus)}\n` +
+      `${formatService('Redis connected', redisStatus)}\n` +
+      `${formatService('MongoDB connected', mongoStatus)}\n` +
+      `\x1b[36m🚀 Server running on ${serverUrl}\x1b[0m\n` +
+      (clientUrl ? `\x1b[35m🌐 Client URL: ${clientUrl}\x1b[0m\n` : '') +
+      `\x1b[90m📍 Environment: ${config.nodeEnv}\x1b[0m\n` +
+      `\x1b[34m🔗 Health: ${serverUrl}/api/health\x1b[0m\n` +
+      `\x1b[34m🔗 Services: ${serverUrl}/api/services/status\x1b[0m\n` +
+      `\x1b[34m🔗 Playground: ${serverUrl}/api/demo/supabase\x1b[0m\n`
+    );
   });
 }
 

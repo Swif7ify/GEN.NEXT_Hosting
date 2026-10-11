@@ -45,9 +45,10 @@ export async function getMongoDb(): Promise<Db | null> {
   }
 }
 
-export async function checkMongoConnection(): Promise<ServiceCheckResult> {
+export async function checkMongoConnection(options?: { silent?: boolean }): Promise<ServiceCheckResult> {
+  const silent = options?.silent ?? false;
   if (!config.mongodb.uri) {
-    console.warn('\x1b[33m[MONGODB] checkConnection called but MONGODB_URI is empty.\x1b[0m');
+    if (!silent) console.warn('\x1b[33m[MONGODB] checkConnection called but MONGODB_URI is empty.\x1b[0m');
     return {
       status: 'not_configured',
       message: 'MongoDB connection string is not configured (missing MONGODB_URI in backend .env).',
@@ -57,7 +58,7 @@ export async function checkMongoConnection(): Promise<ServiceCheckResult> {
   const startTime = Date.now();
   let tempClient: MongoClient | null = null;
   try {
-    console.log(`\x1b[34m[MONGODB] Pinging cluster for database "${config.mongodb.dbName}"...\x1b[0m`);
+    if (!silent) console.log(`\x1b[34m[MONGODB] Pinging cluster for database "${config.mongodb.dbName}"...\x1b[0m`);
     tempClient = new MongoClient(config.mongodb.uri, {
       serverSelectionTimeoutMS: 4000,
       connectTimeoutMS: 4000,
@@ -67,7 +68,7 @@ export async function checkMongoConnection(): Promise<ServiceCheckResult> {
     await tempClient.db(config.mongodb.dbName).command({ ping: 1 });
     const latencyMs = Date.now() - startTime;
 
-    console.log(`\x1b[32m[MONGODB SUCCESS] Ping OK (${latencyMs}ms)\x1b[0m`);
+    if (!silent) console.log(`\x1b[32m[MONGODB SUCCESS] Ping OK (${latencyMs}ms)\x1b[0m`);
     return {
       status: 'connected',
       latencyMs,
@@ -76,7 +77,7 @@ export async function checkMongoConnection(): Promise<ServiceCheckResult> {
   } catch (error: unknown) {
     const latencyMs = Date.now() - startTime;
     const msg = error instanceof Error ? error.message : 'Unknown MongoDB connection error';
-    console.error(`\x1b[31m[MONGODB CONNECTION FAILED] ${msg} (${latencyMs}ms)\x1b[0m`);
+    if (!silent) console.error(`\x1b[31m[MONGODB CONNECTION FAILED] ${msg} (${latencyMs}ms)\x1b[0m`);
     return {
       status: 'unavailable',
       latencyMs,

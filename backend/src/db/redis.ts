@@ -27,9 +27,10 @@ export function createRedisClient(): Redis | null {
   }
 }
 
-export async function checkRedisConnection(): Promise<ServiceCheckResult> {
+export async function checkRedisConnection(options?: { silent?: boolean }): Promise<ServiceCheckResult> {
+  const silent = options?.silent ?? false;
   if (!config.redis.url) {
-    console.warn('\x1b[33m[REDIS] Missing REDIS_URL in environment.\x1b[0m');
+    if (!silent) console.warn('\x1b[33m[REDIS] Missing REDIS_URL in environment.\x1b[0m');
     return {
       status: 'not_configured',
       message: 'Redis connection URL is not configured (missing REDIS_URL in backend .env).',
@@ -39,7 +40,7 @@ export async function checkRedisConnection(): Promise<ServiceCheckResult> {
   const startTime = Date.now();
   const client = createRedisClient();
   if (!client) {
-    console.error('\x1b[31m[REDIS] Failed to construct client.\x1b[0m');
+    if (!silent) console.error('\x1b[31m[REDIS] Failed to construct client.\x1b[0m');
     return {
       status: 'not_configured',
       message: 'Unable to initialize Redis client from REDIS_URL.',
@@ -47,12 +48,12 @@ export async function checkRedisConnection(): Promise<ServiceCheckResult> {
   }
 
   try {
-    console.log(`\x1b[34m[REDIS] Pinging Redis instance...\x1b[0m`);
+    if (!silent) console.log(`\x1b[34m[REDIS] Pinging Redis instance...\x1b[0m`);
     await client.connect();
     const pong = await client.ping();
     const latencyMs = Date.now() - startTime;
 
-    console.log(`\x1b[32m[REDIS SUCCESS] Ping OK: ${pong} (${latencyMs}ms)\x1b[0m`);
+    if (!silent) console.log(`\x1b[32m[REDIS SUCCESS] Ping OK: ${pong} (${latencyMs}ms)\x1b[0m`);
     return {
       status: 'connected',
       latencyMs,
@@ -61,7 +62,7 @@ export async function checkRedisConnection(): Promise<ServiceCheckResult> {
   } catch (error: unknown) {
     const latencyMs = Date.now() - startTime;
     const msg = error instanceof Error ? error.message : 'Unknown Redis connection error';
-    console.error(`\x1b[31m[REDIS CONNECTION FAILED] ${msg} (${latencyMs}ms)\x1b[0m`);
+    if (!silent) console.error(`\x1b[31m[REDIS CONNECTION FAILED] ${msg} (${latencyMs}ms)\x1b[0m`);
     return {
       status: 'unavailable',
       latencyMs,
